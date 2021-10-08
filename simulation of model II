@@ -1,0 +1,79 @@
+tic
+
+% model parameters
+N = 50; r0 = 0.6; r1 = 0.1;
+alpha = 2; mu = 3; p = 0.5; g0 = 0.01; g1 = 2*g0; nu = 200;
+
+% other parameters
+q = 1-p;
+N0 = r0*N; N1 = r1*N;
+M0 = N0*alpha*g0; M1 = N1*alpha*g1;
+vd = power((M0+M1)/(1-power(p,alpha)),1/alpha); vb = p*vd;
+vm = power((M0+M1*power(p,alpha))/(1-power(p,alpha)),1/alpha);
+T1 = alpha*r0/M0*log(vm/vb);
+T2 = (1-r0-r1)/power(vm,alpha);
+T3 = alpha*r1/M1*log(vd/vm);
+w1 = T1/(T1+T2+T3); w2 = T2/(T1+T2+T3); w3 = T3/(T1+T2+T3);
+muprime = w1*(vm-vb)/(log(vm)-log(vb))+w2*vm+w3*(vd-vm)/(log(vd)-log(vm));
+a = power(muprime/mu,alpha);
+M0 = N0*alpha*g0/a; M1 = N1*alpha*g1/a;
+
+% simulation of the paths
+step = 0.05; maxtime = 1e7; num = 1;
+time = 0:step:maxtime; len = length(time);
+stage = zeros(num,len);
+vol = zeros(num,len); birth = []; divsn = []; doubl = [];
+index = 0;
+for k = 1:num
+    vol(k,1) = p*power((M0+M1)/(1-power(p,alpha)),1/alpha); stage(k,1) = 1; temp = 0;
+    birth = [birth,vol(k,1)];
+    for i = 1:len-1
+        if stage(k,i) <= floor(N0)
+            vol(k,i+1) = vol(k,i)*exp(g0*step);
+            if rand < step*a*power(vol(k,i),alpha)
+                stage(k,i+1) = stage(k,i)+1;
+            else
+                stage(k,i+1) = stage(k,i);
+            end
+        elseif stage(k,i) <= N-floor(N1)
+            vol(k,i+1) = vol(k,i);
+            if rand < step*a*power(vol(k,i),alpha)
+                stage(k,i+1) = stage(k,i)+1;
+            else
+                stage(k,i+1) = stage(k,i);
+            end        
+        elseif stage(k,i) < N
+            vol(k,i+1) = vol(k,i)*exp(g1*step);
+            if rand < step*a*power(vol(k,i),alpha)
+                stage(k,i+1) = stage(k,i)+1;
+            else
+                stage(k,i+1) = stage(k,i);
+            end
+        else
+            if rand < step*a*power(vol(k,i),alpha)   
+                vol(k,i+1) = vol(k,i)*betarnd(p*nu,q*nu);
+                stage(k,i+1) = 1;
+                birth = [birth,vol(k,i+1)];
+                divsn = [divsn,vol(k,i)];
+                doubl = [doubl,(i-index)*step];
+                index = i;
+            else
+                vol(k,i+1) = vol(k,i)*exp(g1*step);
+                stage(k,i+1) = stage(k,i);
+            end
+        end
+        i = i+1;
+    end
+end
+
+% distribution of the cell size
+num = 100; [count,bin] = hist(vol,num);
+density = count./sum(count)./(bin(2)-bin(1));
+figure; bar(bin,density,1.0); hold on
+
+% distribution of the birth size
+num = 100; [count,bin] = hist(birth,num);
+density = count./sum(count)./(bin(2)-bin(1));
+figure; bar(bin,density,1.0); hold on
+
+toc
